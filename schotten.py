@@ -1,6 +1,7 @@
-import random as rand
 import itertools
-from abc import ABC, abstractmethod, staticmethod
+import random as rand
+from abc import ABC, abstractmethod
+from typing import List, Tuple, Union
 
 #COLORS = {1:"Purple", 2:"Brown", 3:"Red", 4:"Yellow", 5:"Green", 6:"Blue"}
 NUM_OF_COLORS = 6
@@ -47,8 +48,39 @@ class Board():
         # index_of_fakes["{num}{color}"] all places on board as (player,stone) tuples with a fake - Card(num,color,True)
         self.cards_on_board = [False for _ in range(NUM_OF_NUMS*NUM_OF_COLORS)] 
         # cards_on_board[k*NUM_OF_COLORS + j] == True if and only if card with color j+1 and num k+1 is on the board
-        self.fake_generator = [[Board.__best_cards_with_zero_placed_gen() for _ in range(NUM_OF_STONES)] for x in range(2)]
+        self.fake_generator = [[Board.best_cards_with_zero_placed_gen() for _ in range(NUM_OF_STONES)] for x in range(2)]
         # next(self.fake_generator[player][stone]) = next best fakes you can add to location [player][stone]
+
+    def __repr__(self):
+        output_as_list = []
+        # print player 1
+        for s in range(NUM_OF_STONES):
+            if self.stones[s] == 1:
+                output_as_list.append('===   ')
+            else:
+                output_as_list.append('      ')
+        output_as_list.append('\n')
+        for i in range(3):
+            for stone in range(NUM_OF_STONES):
+                curr_card = self.cards[0][stone][i]
+                output_as_list.append(f'{curr_card.num}{curr_card.color}{"F" if curr_card.fake == True else "T"}   ')
+            output_as_list.append('\n')
+        # print stones
+        output_as_list.append('@@@   '*9)
+        output_as_list.append('\n')
+        # print player 2
+        for s in range(NUM_OF_STONES):
+            if self.stones[s] == 2:
+                output_as_list.append('===   ')
+            else:
+                output_as_list.append('      ')
+        output_as_list.append('\n')
+        for i in range(3):
+            for stone in range(NUM_OF_STONES):
+                curr_card = self.cards[1][stone][i]
+                output_as_list.append(f'{curr_card.num}{curr_card.color}{"F" if curr_card.fake == True else "T"}   ')
+            output_as_list.append('\n')
+        return ''.join(output_as_list)
     
     @staticmethod
     def convert_to_cards_on_board_index(num: int, color: int):
@@ -59,6 +91,9 @@ class Board():
         return self.deck.draw_card()
     
     def claim_stone(self,player: int, stone: int):
+        """Does nothing when stone is claimed"""
+        if self.stones[stone] != 0:
+            return
         self.stones[stone] = player
 
     def clear_fakes(self, player: int, stone: int):
@@ -67,8 +102,9 @@ class Board():
                 self.cards[player][stone] = self.cards[player][stone][:i] # real cards are always at the beginning
                 return
             
-    def __best_card_with_two_placed_gen(self,cards: list(tuple(int, int))):
-        num1, color1, num2, color2 = cards[0], cards[1]
+    @staticmethod
+    def best_card_with_two_placed_gen(cards: List[Tuple[int, int]]):
+        num1, color1, num2, color2 = cards[0][0], cards[0][1], cards[1][0], cards[1][1]
         diff = abs(num1-num2)
         run = diff > 0 and diff <= 2
 
@@ -84,7 +120,7 @@ class Board():
                 # try color run
                 if run:
                     possible_runs = filter(lambda x: abs(num1-x) <= 2 and abs(num2-x) <= 2 and x > 0 and x <= NUM_OF_NUMS,
-                                            set([num1+1, num1-1, num2+1, num2-1].sorted(reverse=True)))
+                                            set(sorted([num1+1, num1-1, num2+1, num2-1],reverse=True)))
                     for possible_run in possible_runs:
                         yield [(possible_run, color1)]
                 # then try color 
@@ -93,7 +129,7 @@ class Board():
             # then run
             if run:
                 possible_runs = filter(lambda x: abs(num1-x) <= 2 and abs(num2-x) <= 2 and x > 0 and x <= NUM_OF_NUMS,
-                                        set([num1+1, num1-1, num2+1, num2-1].sorted(reverse=True)))
+                                        set(sorted([num1+1, num1-1, num2+1, num2-1],reverse=True)))
                 for possible_run in possible_runs:
                     for col in range(NUM_OF_COLORS, 0, -1):
                         yield [(possible_run, col)]
@@ -103,7 +139,8 @@ class Board():
                 yield [(n,c)]
         return
 
-    def __best_cards_with_one_placed_gen(self, num: int, color: int):
+    @staticmethod
+    def best_cards_with_one_placed_gen(num: int, color: int):
         """logic for best card available when one is already in place
             yields duos of tuple(num: int, color: int) of a possible fake to add"""
         POSSIBLE_RUNS = filter(lambda nums: nums[0] <= NUM_OF_NUMS and nums[1] >= 0,[(num+2, num+1), (num+1, num-1), (num-1, num-2)])
@@ -122,7 +159,7 @@ class Board():
             yield [(j, color), (k, color)]
             if j == 2 and k == 1:
                 break
-            if j+k % 2 == 1:
+            if (j+k) % 2 == 1:
                 if k == 1:
                     j -= 1
                 elif j == NUM_OF_NUMS:
@@ -152,7 +189,7 @@ class Board():
                     yield [(j, c), (k, cc)]
             if j == 1 and k == 1:
                 break
-            if j+k % 2 == 1:
+            if (j+k) % 2 == 1:
                 if k == 1:
                     j -= 1
                 elif j == NUM_OF_NUMS:
@@ -214,11 +251,8 @@ class Board():
                         yield [num for _ in range(rep)] + combination
         return
 
-        
-        
-
-
-    def __best_cards_with_zero_placed_gen(self):
+    @staticmethod
+    def best_cards_with_zero_placed_gen():
         # try color run
         POSSIBLE_RUNS = ((n,n+1,n+2) for n in range(NUM_OF_NUMS-2,0,-1))
         for possible_run in POSSIBLE_RUNS:
@@ -233,67 +267,79 @@ class Board():
             for nums in Board.__equal_sum_combinations(s,3,1,NUM_OF_NUMS,1):
                 for c in range(1, NUM_OF_COLORS + 1):
                     yield [(num,c) for num in nums]
+        POSSIBLE_RUNS = ((n,n+1,n+2) for n in range(NUM_OF_NUMS-2,0,-1))
         # best runs
         for possible_run in POSSIBLE_RUNS:
-            for colors in itertools.permutations(range(1,NUM_OF_COLORS+1), 3):
-                yield [(run[0],run[1]) for run in zip(possible_run,colors)]
+            for sc in range(3*NUM_OF_COLORS-1, 3, -1):
+                for colors in Board.__equal_sum_combinations(sc,3,2,NUM_OF_COLORS,1):
+                    yield [(run[0],run[1]) for run in zip(possible_run,colors)]
         # best sums
         for s in range(3*NUM_OF_NUMS-1, 3, -1):  # assumes num_of_nums >= 3
             for nums in Board.__equal_sum_combinations(s,3,2,NUM_OF_NUMS,1):
-                for colors in itertools.permutations(range(1,NUM_OF_COLORS+1), 3):
-                    yield [(comb[0],comb[1]) for comb in zip(nums,colors)]
-        return
-        
+                for sc in range(3*NUM_OF_COLORS-1, 3, -1):
+                    for colors in Board.__equal_sum_combinations(sc,3,2,NUM_OF_COLORS,1):
+                        for unique_perms in set(itertools.permutations(colors,3)):
+                            yield [(comb[0],comb[1]) for comb in zip(nums,unique_perms)]
+        return                
 
-    def get_best_hand(self, player: int, stone: int):
-        """returns list((num, color)) of fakes to add"""
-        cards_in_place = len(self.cards[player][stone])
-        if cards_in_place >= 3:
-            print("Wrong call")
-            return
-        if cards_in_place == 2:
-            return [self.__best_card_with_two_placed(player, stone)]
-        if cards_in_place == 1:
-            for options in self.__best_cards_with_one_placed_gen(self.cards[player][stone][0].num, self.cards[player][stone][0].color):
-                if self.cards_on_board[Board.convert_to_cards_on_board_index(options[0][0], options[0][1])] == False and\
-                    self.cards_on_board[Board.convert_to_cards_on_board_index(options[1][0], options[1][1])] == False:
-                    return options
-        if cards_in_place == 0:
-            for options in self.__best_cards_with_zero_placed_gen():
-                if self.cards_on_board[Board.convert_to_cards_on_board_index(options[0][0], options[0][1])] == False and\
-                    self.cards_on_board[Board.convert_to_cards_on_board_index(options[1][0], options[1][1])] == False and\
-                        self.cards_on_board[Board.convert_to_cards_on_board_index(options[2][0], options[2][1])] == False:
-                        return options                
-
-    def update_fakes(self, card: Card):
+    def update_fakes(self, card: Card, source_player: int, source_stone: int):
         """deletes all fake occurrences of card
-            calls get_best_hand to replace a new possible best hand"""
-        for (player, stone) in self.index_of_fakes["{num}{color}".format(num = card.num, color = card.color)]:
+            calls get_best_hand to replace a new possible best hand
+            (source_player, source_stone): data of where a new card was place"""
+        
+        def helper_gen():
+            """Used to ensure (source_player, source_stone) is attended"""
+            # if card is not on board as a fake, only changes to source are needed
+            try:
+                for (player, stone) in self.index_of_fakes["{num}{color}".format(num = card.num, color = card.color)]:
+                    if player == source_player and stone == source_stone:
+                        continue
+                    yield (player, stone)
+            except KeyError:
+                pass
+            yield (source_player, source_stone)
+            return
+             
+        for (player, stone) in helper_gen():    
             self.clear_fakes(player, stone)
-            new_fakes = self.get_best_hand(player, stone)
+            if player == source_player and stone == source_stone: 
+                # a stone was added -> fake generator needs to be replaced
+                reals_on_stone = len(self.cards[player][stone])
+                if reals_on_stone == 2:
+                    self.fake_generator[player][stone] = Board.best_card_with_two_placed_gen([(card.num, card.color) for card in self.cards[player][stone]])
+                elif reals_on_stone == 1:
+                    self.fake_generator[player][stone] = Board.best_cards_with_one_placed_gen(self.cards[player][stone][0].num, self.cards[player][stone][0].color)
+                else:
+                    continue
+            new_fakes = next(self.fake_generator[player][stone])
             self.cards[player][stone].extend(map(lambda pair: Card(pair[0], pair[1], True), new_fakes))
             for fake_suggestion in new_fakes:
                 try:
                     self.index_of_fakes["{num}{color}".format(num=fake_suggestion[0],color=fake_suggestion[1])].append((player,stone))
                 except KeyError:
                     self.index_of_fakes["{num}{color}".format(num=fake_suggestion[0],color=fake_suggestion[1])] = [(player, stone)]
-        self.index_of_fakes.pop("{num}{color}".format(num = card.num, color = card.color))
+        try:
+            self.index_of_fakes.pop("{num}{color}".format(num = card.num, color = card.color))
+        except KeyError:
+            # card was not on board as a fake
+            pass
                     
 
     def place_card(self,stone: int, card: Card, player: int):
-        self.cards[stone][player].insert(0, card)
+        self.cards[player][stone].insert(0, card)
         self.cards_on_board[Board.convert_to_cards_on_board_index(card.num, card.color)] = True
-        self.update_fakes(card)
+        self.update_fakes(card, player, stone)
         
-        if (len(self.cards[stone][player]) == 3 and len(self.cards[stone][1-player]) < 3):
-            self.cards[stone][player].append(1)
+        if (len(self.cards[player][stone]) == 3 and len(self.cards[1-player][stone]) < 3):
+            self.cards[player][stone].append(1)
 
 class Player(ABC):
     @abstractmethod
-    def choose_stone_and_card(self, state: list, hand: list) -> tuple(int, int):
-        """Gets his side of the stones and hand. \n
+    def choose_stone_and_card(self, state: List[List[List[Union[Card,int]]]], hand: List[Card], claimed: List[int]) -> Tuple[int, int]:
+        """Gets the state of the board, the state of the stones and his hand. \n
         Return (index of chosen card in hand, index of chosen stone)"""
         pass
+        
 
 class Game():
     def __init__(self,p1: Player, p2: Player, cards_in_hand = 6):
@@ -302,7 +348,14 @@ class Game():
         self.hands = [[self.board.draw_card() for i in range(cards_in_hand)] for _ in range(2)]  # [hand of player 1, hand of player 2]
         self.game_over = False
 
-    def get_strength(self, cards: list) -> int:
+    def play(self):
+        while not self.game_over:
+            self.make_move(0)
+            if self.game_over:
+                return
+            self.make_move(1)
+
+    def get_strength(self, cards: List[Union[Card,int]]) -> int:
         """Gets 3 cards a player put in front of a stone, and possibly a 1 indicating he was first.\n
         {sum: 4-47, run: 48-61, color: 62-105, three-of-a-kind: 106-123, color-run: 124-139} 
         order by strength, and first == True adds 1"""
@@ -330,7 +383,9 @@ class Game():
 
 
     def claim_stone(self, player: int):
-        pass
+        for stone in range(0,NUM_OF_STONES):
+            if self.get_strength(self.cards[player][stone]) > self.get_strength(self.cards[1-player][stone]):
+                self.claim_stone(player+1)
 
     def is_game_over(self):
         count = [0,0,0]
@@ -360,11 +415,11 @@ class Game():
         self.is_game_over()
         if self.game_over:
             return
-        card, stone = self.players[player].choose_stone_and_card(self.board.cards[player], self.hands[player])
+        card, stone = self.players[player].choose_stone_and_card([self.board.cards[player].copy(),self.board.cards[1-player].copy()], self.hands[player].copy(),self.board.stones.copy())
         self.board.place_card(stone, self.hands[player].pop(card), player)
         self.hands[player].append(self.board.draw_card())
         
 
 
 
-
+    
