@@ -1,5 +1,6 @@
 import random
 import re
+from itertools import product
 from typing import List, Union, Tuple
 from schotten_again import Player,Card,Hand,Board
 
@@ -12,8 +13,8 @@ class Tools():
     @staticmethod
     def gen_cards() -> Card:
         """generate all possible cards"""
-        for i in range(NUM_OF_NUMS):
-            for j in range(NUM_OF_COLORS):
+        for i in range(1,NUM_OF_NUMS+1):
+            for j in range(1,NUM_OF_COLORS+1):
                 yield Card(i,j)
         return
     
@@ -39,7 +40,7 @@ class Tools():
         for cards in Tools.gen_n_cards(n):
             to_yield = True
             for card in cards:
-                if available_cards[card.num][card.color]:
+                if available_cards[card.num-1][card.color-1]:
                     to_yield = False
             if to_yield:
                 yield cards
@@ -50,13 +51,16 @@ class Tools():
 # NOTE: computation might be problematic
 # because it doesn't account for uses of the same card for different players
 class HandStrengthEstimate(Player):
+    def __init__(self):
+        self.p = 0 # player always acts as if he's player 0
+        
     def update_board(self, board: Board):
         self.board = board
         
     @staticmethod
     def get_strengths_count(hand: Hand, available_cards, accumulate=False) -> List[int]:
         """counts num of different possible combinations with same strength"""
-        L = [0 for _ in range(72)]
+        L = [0 for _ in range(73)]
         g = Tools.gen_n_available_cards(3-len(hand), available_cards)
         for cards in g:
             tmp_hand = Hand(cards)
@@ -78,8 +82,8 @@ class HandStrengthEstimate(Player):
         NeighborFactor - claimed neighbors/4 + other's claimed neighbors/4 \n
         4 is max number of neighbors"""
         
-        hand1 = self.board.cards_on_board[player][stone]
-        hand2 = self.board.cards_on_board[1-player][stone]
+        hand1 = self.board.cards[player][stone]
+        hand2 = self.board.cards[1-player][stone]
         available_cards = self.board.cards_on_board
         advantage = self.board.advantage[stone] == player+1
         
@@ -134,11 +138,11 @@ class HandStrengthEstimate(Player):
         
         return hand_factor * (1+(C/4)*(others_claimed_neighbors+claimed_neighbors))
         
-    def choose_stone_and_card(self, cards_in_hand: List[Card], board: Board) -> Tuple[int,int]:
+    def choose_stone_and_card(self, cards_in_hand: List[Card], board: Board, **kwargs) -> Tuple[int,int]:
         self.update_board(board)
         available_stones = [i for i in range(NUM_OF_STONES) if len(self.board.cards[self.p][i]) < 3]
         if len(available_stones) == 0:
-            return 0,0
+            return -1,-1
         argmax_card = 0
         argmax_stone, max_strength = 0, -1
         for card_index in range(len(cards_in_hand)):
@@ -157,5 +161,63 @@ class HandStrengthEstimate(Player):
         self.update_board(board)
         return [i for i in range(NUM_OF_STONES)]
             
+class AnalogPlayer(Player):
+    def choose_stone_and_card(self, cards_in_hand: List[Card], board: Board, **kwargs) -> Tuple[int, int]:
+        print(board)
+        print('\n')
+        for i in range(len(cards_in_hand)):
+            print(str(cards_in_hand[i])+'   ',end='')
+        print('')
+        available_stones = [stone for stone in range(len(board.stones)) if board.stones[stone] == 0 and len(board.cards[0][stone]) < 3]
+        if len(available_stones) == 0 or len(cards_in_hand) == 0:
+            print('No stones available / no cards available')
+            return -1,-1
+        valid = False
+        card, stone = None, None
+        while not valid:
+            player_input = re.match('([0-5]),([0-8])',input('Choose a card index from hand (zero-indexed, left to right) and a stone to place in front, as a string separated by a comma '))
+            valid = True
+            try:
+                card, stone = int(player_input.group(1)), int(player_input.group(2))
+            except (IndexError, AttributeError):
+                print('Invalid input')
+                valid = False
+                continue
+            confirmation = input(f"You have chosen stone {stone} and card {cards_in_hand[card]}. Are you sure? otherwise enter 'n' ")
+            if confirmation == 'n':
+                valid = False
+            if valid:
+                if card >= len(cards_in_hand) or (not stone in available_stones):
+                    print(r"Invalid card index\stone index")
+                    valid = False
+        return card, stone
+    
+    def claim(self, board):
+        print(board)
+        print('\n')
+        while True:
+            stones = re.split('[^0-8]', input('Choose stones to claim,comma separated'))
+            stones = [stone for stone in stones if len(stone) == 1 and stone.isdigit()]
+            prompt = f'stones {",".join(stones)}' if len(stones) > 0 else 'no stones'
+            confirmation = input(f'You have chosen {prompt}. Are you sure? otherwise enter \'n\' ')
+            if not confirmation == 'n':
+                break
+        return list(stones)
+        
+class RandomPlayer(Player):
+    def choose_stone_and_card(self, cards_in_hand: List[Card], board: Board, **kwargs) -> Tuple[int, int]:
+        if super().choose_stone_and_card(cards_in_hand, board) == (-1,-1):
+            return -1, -1
+        available_stones = board.available_stones(0)
+        action = random.choice(list(product(list(range(len(cards_in_hand))), available_stones))) 
+        print(action)
+        return action
+    
+    def claim(self, board: Board) -> List[int]:
+        print(board)
+        return super().claim(board)
+        
+        
+        
         
         

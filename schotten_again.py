@@ -1,7 +1,12 @@
 import random as rand
 
 from abc import ABC, abstractmethod
-from typing import List, Union, Type, Self, Tuple, Optional
+from typing import List, Union, Type, Tuple, Optional
+
+global COLORS
+global NUM_OF_COLORS
+global NUM_OF_NUMS
+global NUM_OF_STONES
 
 COLORS = {1:"Purple", 2:"Brown", 3:"Red", 4:"Yellow", 5:"Green", 6:"Blue"}
 NUM_OF_COLORS = 6
@@ -12,11 +17,19 @@ CARDS_IN_HAND = 6
 class Card():
     def __init__(self, num: int, color: int):
         """num in [1,NUM_OF_NUMS], color in [1,NUM_OF_COLORS]"""
+        if num < 1 or num > 9 or color < 1 or color > 6:
+            raise ValueError("Invalid number or color")
         self.num = num
         self.color = color
         
+    def copy(self):
+        return Card(self.num, self.color)
+        
     def __repr__(self) -> str:
         return f"{self.num}{COLORS[self.color][:2]}"
+    
+    def __hash__(self):
+        return hash((self.num, self.color))
     
     def __eq__(self, other):
         if type(other) == type(self):
@@ -28,19 +41,28 @@ class Card():
                 raise TypeError()
             return self.num == other[0] and self.color == other[1]
         else:
-            raise TypeError()
+            raise TypeError(f'Invalid type {type(other)}')
 class Hand():
-    def __init__(self, cards: List[Card]=[]):
+    def __init__(self, cards: List[Card]=None):
         """Class for handling triplets in front of stones."""
-        self.hand = cards
+        if cards is None:
+            self.hand = []
+        else:
+            if len(cards) > 3:
+                raise ValueError("Too many cards")
+            self.hand = cards
     
     def __len__(self):
         return len(self.hand)
         
     def append(self, card: Card):
+        if len(self.hand) == 3:
+            raise ValueError(f"Too many cards in hand\n{[str(card) for card in self.hand]}")
         self.hand.append(card)
         
-    def extend(self, cards: Union[Self,List[Card]],copy=True):
+    def extend(self, cards,copy=True):
+        if len(self) + len(cards) > 3:
+            raise ValueError("Too many cards")
         if type(cards) == list:
             self.hand.extend(cards)
         #elif copy:
@@ -49,6 +71,8 @@ class Hand():
             self.hand.extend(cards.hand)
     
     def pop(self, index=-1) -> Optional[Card]:
+        if len(self) == 0 and (index == -1 or index == 0):
+            return
         return self.hand.pop(index)
     
     def __getitem__(self, index):
@@ -62,7 +86,7 @@ class Hand():
             print(f"WARNING: hand length is too short")
             return
         # check if three of a kind
-        if hand[0].num == hand[1].num and hand[1] == hand[2]:
+        if hand[0].num == hand[1].num and hand[1].num == hand[2].num:
             return 56+hand[0].num
         
         is_run, is_color = False, False
@@ -101,25 +125,30 @@ class Hand():
     
     def hand_not_on_board(self, available_cards: List[List[int]]) -> bool: 
         for card in self.hand:
-            if available_cards[card.num][card.color]:
+            if available_cards[card.num-1][card.color-1]:
                 return False
         return True
     
     
 class Deck():
-    def __init__(self, deck: List[Card]=[]):
-        if deck:
-            self.deck = deck
-        else:
+    def __init__(self, deck: List[Card]=None):
+        if deck is None:
             self.deck = []
             for i in range(1,NUM_OF_COLORS + 1):
                 for j in range(1, NUM_OF_NUMS + 1):
                     self.deck.append(Card(j,i))
             rand.shuffle(self.deck)
+        else:
+            self.deck = deck
             
     def copy(self):
         return Deck(self.deck.copy())
     
+    def __len__(self):
+        return len(self.deck)
+    
+    def __getitem__(self, key):
+        return self.deck[key]
     
     def draw_card(self):
         try:
@@ -143,13 +172,38 @@ class Board():
         self.cards_on_board = kwargs.get('cards_on_board',[[False for _ in range(NUM_OF_COLORS)] for j in range(NUM_OF_NUMS)])
         # cards_on_board[i][j] == True iff Card(num=i+1,color=j+1) is on the board
         
+    def available_stones(self, player: int) -> List[int]:    
+        return [stone for stone in range(len(self.stones)) if self.stones[stone] == 0 and len(self.cards[player][stone]) < 3]
+    
+    def change_pov(self):
+        state = self.copy()
+        s = 'breakpoint'
+        state.stones = [state.stones[len(state.stones)-1-i] for i in range(len(state.stones))]
+        state.advantage = [state.advantage[len(state.advantage)-1-i] for i in range(len(state.advantage))]
+        for i in range(NUM_OF_STONES):
+            if state.stones[i] == 1:
+                state.stones[i] = 2
+            elif state.stones[i] == 2:
+                state.stones[i] = 1
+            if state.advantage[i] == 1:
+                state.advantage[i] = 2
+            elif state.advantage[i] == 2:
+                state.advantage[i] = 1
+        state.cards[0] = [state.cards[0][NUM_OF_STONES-1-i] for i in range(len(state.cards[0]))]
+        state.cards[1] = [state.cards[1][NUM_OF_STONES-1-i] for i in range(len(state.cards[1]))]
+        state.cards[0], state.cards[1] = state.cards[1], state.cards[0]
+        
+        return state
+        
     def __repr__(self, p=0):
         """p = 0 if viewpoint is from first player. p = 1 otherwise"""
-        
+        board = self
+        if p == 1:
+            board = self.change_pov()
         # print other player
         output_as_list = []
         for s in range(NUM_OF_STONES):
-            if self.stones[s] == 2-p:
+            if board.stones[s] == 2:
                 output_as_list.append('===   ')
             else:
                 output_as_list.append('      ')
@@ -158,38 +212,40 @@ class Board():
         
         for i in range(3):
             for stone in range(NUM_OF_STONES):
-                if i >= len(self.cards[1-p][stone]):
+                if i >= len(board.cards[1][stone]):
                     output_as_list.append('      ')
                 else:
-                    output_as_list.append(str(self.cards[1-p][stone][i])+'   ')
+                    output_as_list.append(str(board.cards[1][stone][i])+'   ')
             output_as_list.append('\n')
             
         output_as_list.append('\n')
         
         # print stones
         for s in range(NUM_OF_STONES):
-            if self.stones[s] == 0:
+            if board.stones[s] == 0:
                 output_as_list.append('===   ')
             else:
                 output_as_list.append('      ')
+        
+        output_as_list.append('\n\n')
         
         # print player
         for i in range(3):
             for stone in range(NUM_OF_STONES):
-                if i >= len(self.cards[p][NUM_OF_STONES-1-stone]):
+                if 2-i >= len(board.cards[0][stone]):
                     output_as_list.append('      ')
                 else:
-                    output_as_list.append(str(self.cards[p][NUM_OF_STONES-1-stone][i])+'   ')
+                    output_as_list.append(str(board.cards[0][stone][2-i])+'   ')
             output_as_list.append('\n')
             
-        output_as_list.append('\n\n')
+        output_as_list.append('\n')
         
         for s in range(NUM_OF_STONES):
-            if self.stones[s] == p+1:
+            if board.stones[s] == 1:
                 output_as_list.append('===   ')
             else:
                 output_as_list.append('      ')
-        output_as_list.append('\n')
+        #output_as_list.append('\n')
         return ''.join(output_as_list)
     
     def copy(self):
@@ -199,7 +255,7 @@ class Board():
         items['cards'] = [[self.cards[i][j].copy() for j in range(NUM_OF_STONES)] for i in range(2)]
         items['advantage'] = self.advantage.copy()
         items['cards_on_board'] = [self.cards_on_board[i].copy() for i in range(NUM_OF_NUMS)]
-        return Board(items)
+        return Board(**items)
     
     def pop_from_stone(self,player,stone) -> Optional[Card]:
         """Reverses the action of the place_card function"""
@@ -228,9 +284,9 @@ class Board():
         if len(hand2) == 2:
             for num in range(NUM_OF_NUMS):
                 for color in range(NUM_OF_COLORS):
-                    if hand2[0] == (num,color) or hand2[1] == (num,color) or cards_on_board[num][color] == True:
+                    if hand2[0] == (num+1,color+1) or hand2[1] == (num+1,color+1) or cards_on_board[num][color] == True:
                         continue
-                    other_strength = Hand.strength_from_list(hand2[0],hand2[1],Card(num,color))
+                    other_strength = Hand.strength_from_list([hand2[0],hand2[1],Card(num+1,color+1)])
                     if other_strength > hand1_strength:
                         return False
             return True
@@ -239,10 +295,10 @@ class Board():
                 for color1 in range(NUM_OF_COLORS):
                     for num2 in range(NUM_OF_NUMS):
                         for color2 in range(NUM_OF_COLORS):
-                            if (num1,color1) == (num2,color2) or hand2[0] == (num1,color1) or hand2[0] == (num2,color2) or \
+                            if (num1,color1) == (num2,color2) or hand2[0] == (num1+1,color1+1) or hand2[0] == (num2+1,color2+1) or \
                             cards_on_board[num1][color1] == True or cards_on_board[num2][color2] == True:
                                 continue
-                            other_strength = Hand.strength_from_list(hand2[0],Card(num1,color1),Card(num2,color2))
+                            other_strength = Hand.strength_from_list([hand2[0],Card(num1+1,color1+1),Card(num2+1,color2+1)])
                             if other_strength > hand1_strength:
                                 return False
             return True
@@ -256,7 +312,7 @@ class Board():
                                     if (num1,color1) == (num2,color2) or (num1,color1) == (num3,color3) or (num2,color2) == (num3,color3) \
                                         or cards_on_board[num1][color1] == True or cards_on_board[num2][color2] == True or cards_on_board[num3][color3]:
                                         continue
-                                    other_strength = Hand.strength_from_list(Card(num1,color1),Card(num2,color2),Card(num3,color3))
+                                    other_strength = Hand.strength_from_list([Card(num1+1,color1+1),Card(num2+1,color2+1),Card(num3+1,color3+1)])
                                     if other_strength > hand1_strength:
                                         return False
             return True
@@ -276,19 +332,20 @@ class Board():
             count[p] += 1
         if neighboring_stones_count == 3 and neighboring_stones_player != 0:
             return neighboring_stones_player
-        if count[1] == 5:
+        if count[1] >= 5:
             return 1
-        if count[2] == 5:
+        if count[2] >= 5:
             return 2
         return 0
         
-    def claim_stone(self,player: int, stone: int):
+    def claim_stone(self,player: int, stone: int, show=True):
         """Does nothing when stone is claimed"""
         if self.stones[stone] != 0:
             return
         if not Board.is_legal_claim(self.cards[player][stone],self.cards[1-player][stone],
                                     self.advantage[stone] == player+1,self.cards_on_board):
-            print(f"Invalid claim")
+            if show:
+                print(f"Invalid claim")
             return
         self.stones[stone] = player+1
         
@@ -296,68 +353,100 @@ class Board():
         self.cards[player][stone].append(card)
         if len(self.cards[player][stone]) == 3 and self.advantage[stone] == 0:
             self.advantage[stone] = player + 1
+        self.cards_on_board[card.num-1][card.color-1] = True
 
 
 
 class Player(ABC):
+    """Player always acts as if he is player 1.
+    Board is received with other players card in the deck."""
     @abstractmethod
-    def choose_stone_and_card(self, cards_in_hand: List[Card], board: Board) -> Tuple[int,int]:
-        """if you cant make a move, return (0,0), otherwise (card, stone)"""
-        pass
-    
-    def assign_player(self, p: int):
-        self.p = p
+    def choose_stone_and_card(self, cards_in_hand: List[Card], board: Board, **kwargs) -> Tuple[int,int]:
+        """if you cant make a move, return (-1,-1), otherwise (card, stone)"""
+        available_stones = board.available_stones(0)
+        if len(available_stones) == 0 or len(cards_in_hand) == 0:
+            #print('No moves available')
+            return (-1,-1)
+        return 0, 0
     
     @abstractmethod
     def claim(self,board: Board) -> List[int]:
-        pass
+        return list(range(NUM_OF_STONES))
             
 class Game():
     def __init__(self, p1: Type[Player], p2: Type[Player], **kwargs):
-        self.board = kwargs.get('board',Board())
+        tmp = kwargs.get('board', None)
+        if tmp is None:
+            self.board = Board()
+        else:
+            self.board = tmp
         self.players = [p1, p2]
-        p1.assign_player(0)
-        p2.assign_player(1)
-        self.hands = [[self.board.draw_card() for _ in range(CARDS_IN_HAND)] for p in range(2)]
+        tmp = kwargs.get('hands', None)
+        if tmp is None:
+            self.hands = [[self.board.draw_card() for _ in range(CARDS_IN_HAND)] for p in range(2)]
+        else:
+            self.hands = tmp
         self.game_over = False
     
-    def play(self):
+    
+    def play(self, show=True):
         while not self.game_over:
-            print(f'Player 1, make your move: ')
-            self.make_move(0)
-            self.is_game_over()
+            #print(self.board)
+            if show:
+                print(f'Player 1, make your move: ')
+            self.make_move(0,show)
+            self.is_game_over(show)
             if self.game_over:
-                return
-            print(f'Player 2, make your move: ')
-            self.make_move(1)
-            self.is_game_over()
+                return 0
+            if show:
+                print(f'Player 2, make your move: ')
+            self.make_move(1,show)
+            self.is_game_over(show)
+        return 1
             
-    def claim_stone(self, player: int, stone: int):
-        self.board.claim_stone(player, stone)
+    def claim_stone(self, player: int, stone: int, show: bool=True):
+        self.board.claim_stone(player, stone, show)
         
-    def is_game_over(self):
+    def is_game_over(self, show=True):
         res = self.board.is_board_terminal()
         if res == 1:
             self.game_over = True
-            print("Player 1 wins.")
+            if show:
+                print("Player 1 wins.")
             return
         if res == 2:
             self.game_over = True
-            print("Player 2 wins.")
+            if show:
+                print("Player 2 wins.")
             return
         
-    def make_move(self, player: int, copy=True):
-        if copy:
-            state = self.board.copy()
-        else:
-            state = self.board
+    def make_move(self, player: int, show=True):
+        state = self.board.copy()
+        if player == 1:
+            state = self.board.change_pov()
+        deck = []
+        for i in range(1,NUM_OF_COLORS + 1):
+            for j in range(1, NUM_OF_NUMS + 1):
+                if (not self.board.cards_on_board[j-1][i-1]) and (not Card(j,i) in self.hands[player]):
+                    deck.append(Card(j,i))
+        state.deck = Deck(deck)
         claims = self.players[player].claim(state)
+        if player == 1:
+            claims = [NUM_OF_STONES-stone-1 for stone in claims]
         for s in claims:
-            self.claim_stone(player, s)
-        card, stone = self.players[player].choose_stone_and_card(self.hands[player], state)
-        if card == 0 and stone == 0:
-            return
-        self.board.place_card(stone, self.hands[player].pop(card), player)
-        self.hands[player].append(self.board.draw_card())
-        
+            self.claim_stone(player, s, show)
             
+        card, stone = self.players[player].choose_stone_and_card(self.hands[player], state)
+        if card < 0 or stone < 0:
+            return
+        if player == 1:
+            stone = NUM_OF_STONES-1-stone
+        self.board.place_card(stone, self.hands[player].pop(card), player)
+        drawn_card = self.board.draw_card()
+        if not (drawn_card is None):
+            self.hands[player].append(drawn_card)
+        
+if __name__ == "__main__":
+    from basic_players import RandomPlayer, AnalogPlayer
+    game = Game(RandomPlayer(), RandomPlayer())
+    game.play(show=False)    
