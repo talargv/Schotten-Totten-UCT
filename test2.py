@@ -18,6 +18,15 @@ CARDS_IN_HAND = 6
         print([str(card) for card in game.hands[0]])
         print([str(card) for card in game.hands[1]])"""
         
-game = Game(UCTPlayer(max_iter=1000), QuiteAwfulPlayer())
-res = game.play()
+game = Game(UCTPlayer(max_iter=150), QuiteAwfulPlayer())
+try:
+    res = game.play(show=False)
+except (KeyboardInterrupt) as err:
+    print(game.board)
+    print(game.board.stones)
+    print([str(card) for card in game.board.deck.deck])
+    print([str(card) for card in game.hands[0]])
+    print([str(card) for card in game.hands[1]])
+    raise err
+#res = game.play()
 print(res)

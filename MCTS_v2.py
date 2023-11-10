@@ -74,17 +74,26 @@ class DecisionNode(UCTNode):
         available_stones = board.available_stones(player=0)
         
         if len(cards_in_hand) == 0 or len(available_stones) == 0:
+            if len(self.children) == 1:
+                return self.children[0]
             return self.generate_child('')
         
         if len(self.children) == len(available_stones)*len(cards_in_hand):
             return self.UCB()
         else:
-            actions_tree = [[False for _ in range(len(available_stones))] for j in range(len(cards_in_hand))]
+            """actions_tree = [[False for _ in range(len(available_stones))] for j in range(len(cards_in_hand))]
             for child in self.children:
                 actions_tree[int(child.leading_action[0])][int(child.leading_action[1])] = True
             available_action = [f'{i}{j}' for i in range(len(actions_tree)) for j in range(len(actions_tree[0])) if actions_tree[i][j]==False]
             chosen_action = random.choice(available_action)
+            return self.generate_child(chosen_action)"""
+            actions_table = set()
+            for child in self.children:
+                actions_table.add(child.leading_action)
+            available_actions = [f'{card_index}{stone}' for card_index in range(len(cards_in_hand)) for stone in available_stones if not f'{card_index}{stone}' in actions_table]
+            chosen_action = random.choice(available_actions)
             return self.generate_child(chosen_action)
+            
                 
 class ChanceNode(UCTNode):
     def __init__(self, parent, leading_action: str, *args):
@@ -101,6 +110,8 @@ class ChanceNode(UCTNode):
         available_stones = board.available_stones(player=0)
         
         if len(board.deck) <= 6 or len(cards_in_hand) == 0 or len(available_stones) == 0:
+            if len(self.children) == 1:
+                return self.children[0]
             return self.generate_child('')
         
         chosen_card = random.randint(0, len(board.deck)-1)
@@ -143,6 +154,8 @@ class OpponentNode(UCTNode):
         available_stones = board.available_stones(player=1)
         
         if len(board.deck) == 0 or len(available_stones) == 0:
+            if len(self.children) == 1:
+                return self.children[0]
             return self.generate_child('')
         
         chosen_card, chosen_stone = simulate_turn(board=board, player=1, possible_cards=board.deck)
@@ -163,7 +176,7 @@ class UCT():
             return
         if action_type == 0:
             board.deck.deck.remove(Card(int(action[0]),int(action[1])))
-            self.board.place_card(int(action[2]), Card(int(action[0]),int(action[1])), 1)
+            board.place_card(int(action[2]), Card(int(action[0]),int(action[1])), 1)
         elif action_type == 1:
             board.place_card(int(action[1]), cards_in_hand.pop(int(action[0])), 0)
         else:
@@ -176,14 +189,21 @@ class UCT():
         cards_in_hand = [Card(card.num,card.color) for card in self.cards_in_hand]
         
         while board.is_board_terminal() == 0:
-            if type(node) == DecisionNode:
-                available_stones = board.available_stones(player=0)
-                if len(node.children) < len(available_stones)*len(cards_in_hand) or len(node.children) == 0: # a new node will be added
-                    node = node.tree_policy(board, cards_in_hand)
-                    self.update_state_from_action(board, cards_in_hand, node.leading_action, node.parent.action_type)
-                    return node, board, cards_in_hand
+            num_children_before = len(node.children) # Data to check if a new child was created
             node = node.tree_policy(board, cards_in_hand)
-            self.update_state_from_action(board, cards_in_hand, node.leading_action, node.parent.action_type)
+            try:
+                self.update_state_from_action(board, cards_in_hand, node.leading_action, node.parent.action_type)
+            except ValueError as e:
+                print(board)
+                print([str(card) for card in cards_in_hand])
+                print(type(node.parent), node.parent.action_type, node.leading_action)
+                for child in node.parent.children:
+                    print(node.leading_action, end=' ')
+                print('')
+                raise e
+            parent = node.parent
+            if type(parent) == DecisionNode and len(parent.children) > num_children_before: # a new child was created
+                return node, board, cards_in_hand
         return node, board, cards_in_hand
         
     def backup(self, node: UCTNode, reward: int):
@@ -197,7 +217,7 @@ class UCT():
         iter = 0
         while iter < max_iter:
             iter += 1
-            print(iter)
+            #print(iter)
             node, board, cards_in_hand = self.tree_search(root) 
             random.shuffle(board.deck.deck)
             others_hand = [board.draw_card() for _ in range(min(CARDS_IN_HAND,len(board.deck)))]
