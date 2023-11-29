@@ -1,4 +1,4 @@
-from schotten_again import Player, Card, Board, Game, Hand, NUM_OF_STONES, CARDS_IN_HAND
+from schotten_again import Player, Card, Board, Game, Hand, NUM_OF_STONES, CARDS_IN_HAND, BoardWithFakes
 
 from abc import ABC, abstractmethod
 from itertools import product
@@ -69,7 +69,7 @@ class DecisionNode(UCTNode):
         return child
           
     def tree_policy(self, board: Board, cards_in_hand: List[Card]):
-        assert board.is_board_terminal() == 0
+        #assert board.is_board_terminal() == 0
         
         available_stones = board.available_stones(player=0)
         
@@ -105,7 +105,7 @@ class ChanceNode(UCTNode):
         return child    
 
     def tree_policy(self, board: Board, cards_in_hand: List[Card]):
-        assert board.is_board_terminal() == 0
+        #assert board.is_board_terminal() == 0
         
         available_stones = board.available_stones(player=0)
         
@@ -149,7 +149,7 @@ class OpponentNode(UCTNode):
         return child    
     
     def tree_policy(self, board: Board, cards_in_hand: List[Card]):
-        assert board.is_board_terminal() == 0
+        #assert board.is_board_terminal() == 0
         
         available_stones = board.available_stones(player=1)
         
@@ -222,17 +222,19 @@ class UCT():
             random.shuffle(board.deck.deck)
             others_hand = [board.draw_card() for _ in range(min(CARDS_IN_HAND,len(board.deck)))]
             hands = [cards_in_hand,others_hand]
-            # ASSERTION
-            for card in hands[0]:
-                assert not card is None
-            for card in hands[1]:
-                assert not card is None
-            # END ASSERTION
             if type(node) != DecisionNode:
                 hands = [others_hand, cards_in_hand]
                 board = board.change_pov()
-            simulation = Game(QuiteAwfulPlayer(), QuiteAwfulPlayer(), board=board, hands=hands)
-            res = simulation.play(show=False)
+            simulation = Game(QuiteAwfulPlayer(), QuiteAwfulPlayer(),board_gen=BoardWithFakes, board=board, hands=hands)
+            try:
+                res = simulation.play(show=False)
+            except KeyboardInterrupt as err:
+                print(simulation.board)
+                print(simulation.board.stones)
+                print([str(card) for card in simulation.board.deck.deck])
+                print([str(card) for card in simulation.hands[0]])
+                print([str(card) for card in simulation.hands[1]])
+                raise err
             if type(node) == DecisionNode:
                 res = 1-res
             self.backup(node, res)
