@@ -1,7 +1,9 @@
-from schotten_again import Game
+from schotten_again import Game, BoardWithFakes
 from basic_players import AnalogPlayer
+from MCTS_v2 import UCTPlayer, QuiteAwfulPlayer
 
 p1 = AnalogPlayer()
-p2 = AnalogPlayer()
+p2 = UCTPlayer(max_iter=100)
 
-Game(p1,p2).play()
+game = Game(p2, p1, BoardWithFakes, True)
+game.play(show=False)

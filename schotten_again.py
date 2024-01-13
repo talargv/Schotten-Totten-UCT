@@ -734,15 +734,17 @@ class Game():
         res = self.board.is_board_terminal()
         if res == 1:
             self.game_over = True
-            if show:
-                print("Player 1 wins.")
+            if self.owner:
+                print(self.board)
+                print("\nGame Over")
             if self.owner:
                 self.board.close()
             return
         elif res == 2:
             self.game_over = True
-            if show:
-                print("Player 2 wins.")
+            if self.owner:
+                print(self.board)
+                print("\nGame Over")
             if self.owner:
                 self.board.close()
             return

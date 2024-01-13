@@ -163,8 +163,8 @@ class HandStrengthEstimate(Player):
             
 class AnalogPlayer(Player):
     def choose_stone_and_card(self, cards_in_hand: List[Card], board: Board, **kwargs) -> Tuple[int, int]:
-        print(board)
-        print('\n')
+        #print(board)
+        #print('\n')
         for i in range(len(cards_in_hand)):
             print(str(cards_in_hand[i])+'   ',end='')
         print('')
@@ -175,10 +175,14 @@ class AnalogPlayer(Player):
         valid = False
         card, stone = None, None
         while not valid:
-            player_input = re.match('([0-5]),([0-8])',input('Choose a card index from hand (zero-indexed, left to right) and a stone to place in front, as a string separated by a comma '))
+            player_input = re.match('([0-5]),([0-8])',input('Choose a card index from hand (zero-indexed, left to right) and a stone to place in front, as a string separated by a comma  '))
             valid = True
             try:
                 card, stone = int(player_input.group(1)), int(player_input.group(2))
+                if card >= len(cards_in_hand):
+                    print("Invalid card index.")
+                    valid = False
+                    continue
             except (IndexError, AttributeError):
                 print('Invalid input')
                 valid = False
@@ -196,13 +200,13 @@ class AnalogPlayer(Player):
         print(board)
         print('\n')
         while True:
-            stones = re.split('[^0-8]', input('Choose stones to claim,comma separated'))
+            stones = re.split('[^0-8]', input('Choose stones to claim,comma separated  '))
             stones = [stone for stone in stones if len(stone) == 1 and stone.isdigit()]
             prompt = f'stones {",".join(stones)}' if len(stones) > 0 else 'no stones'
             confirmation = input(f'You have chosen {prompt}. Are you sure? otherwise enter \'n\' ')
             if not confirmation == 'n':
                 break
-        return list(stones)
+        return list(int(stone) for stone in stones)
         
 class RandomPlayer(Player):
     def choose_stone_and_card(self, cards_in_hand: List[Card], board: Board, **kwargs) -> Tuple[int, int]:
